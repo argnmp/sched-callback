@@ -1,8 +1,11 @@
-//! # Overview
-//! This crate provides scheduler that executes async callback at certain point.
-//! Scheduler works on the tokio runtime.
+//! # sched-callback
+//! A scheduler that executes async callback at certain point.
+//! 
+//! ## Overview
+//! - Works on tokio runtime.
+//! - Lightweight scheduler that only one task is executed in one task queue.
 //!
-//! # Usage
+//! ## Usage
 //! Create scheduler using `queue::SchedQueue`
 //! ```rust,no_run
 //! let sq = SchedQueue::new();
@@ -14,7 +17,7 @@
 //! ````
 //!
 //! Add task with callback.
-//! Callback will be triggered 1 second after the task is added, and will be rescheduled for 10 times after the callback has triggered.
+//! Callback will be triggered 1 second after the task is added, and will be rescheduled for 10 times after the callback has been triggered.
 //! ```rust,no_run
 //! sq.add(Task::new(SchedType::Delay(Duration::from_secs(1), 10), Box::new(move || {
 //!     Box::pin(async move {
@@ -27,7 +30,6 @@
 //! timestamp that the callback will be triggered at. `SchedType::Delay(Duration, usize)` specifies
 //! when the callback will be triggered after the task is added and how many times will it be
 //! rescheduled.
-//!
 
 pub mod task;
 pub mod queue;
