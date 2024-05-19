@@ -1,6 +1,6 @@
 [package]
 name = "sched-callback"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Rust library for async callback scheduling"
 authors = ["Taehyeon Kim <argnmp@gmail.com>"]
