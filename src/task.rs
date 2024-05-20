@@ -33,7 +33,10 @@ impl Task {
     pub(crate) fn ready(&mut self) {
         match &mut self.sched_type {
             SchedType::Timestamp(timestamp) => {
-                self.timestamp = Some(*timestamp);
+                match self.timestamp {
+                    Some(_) => self.timestamp = None,
+                    None => self.timestamp = Some(*timestamp),
+                }
             },
             SchedType::Delay(dur, count) => {
                 match count {
@@ -48,7 +51,6 @@ impl Task {
             }
             
         }
-        // println!("{:?}", self.sched_type);
         self._rt = Some(tokio::runtime::Handle::current());
     }
 }

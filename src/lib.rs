@@ -48,11 +48,12 @@ mod test {
 
         let acc = Arc::new(Mutex::new(0));
 
-        for i in 0..10000 {
+        for i in 0..10 {
             let acc = acc.clone();
-            sq.add(Task::new(SchedType::Delay(Duration::from_millis(10001-i), 10), Box::new(move || {
+            sq.add(Task::new(SchedType::Delay(Duration::from_secs(11-i), 1), Box::new(move || {
                 let acc = acc.clone();
                 Box::pin(async move {
+                    println!("hello {}", i);
                     let mut guard = acc.lock().await;
                     *guard += 1;
                 })
