@@ -16,6 +16,9 @@ pub enum SchedType {
     Delay(Duration, usize),
 }
 
+/// Task struct that implements Future.
+/// Wait until the timestamp and then execute the callback.
+/// `ready` must be called before starting polling of this future.
 pub struct Task {
     pub(crate) id: Option<usize>,
     sched_type: SchedType,
@@ -36,7 +39,8 @@ impl Task {
             _rt: None,
         }
     }
-    pub(crate) fn ready(&mut self, rt: tokio::runtime::Handle) {
+    /// Set timestamp of this future, and handle that executes the async job.
+    pub fn ready(&mut self, rt: tokio::runtime::Handle) {
         // initialize next timestamp using sched type of task
         match &mut self.sched_type {
             SchedType::Timestamp(timestamp) => {
