@@ -33,35 +33,4 @@
 
 pub mod task;
 pub mod queue;
-
-#[cfg(test)]
-mod test {
-    use std::{sync::Arc, time::Duration};
-
-    use tokio::sync::Mutex;
-
-    use crate::{queue::SchedQueue, task::{SchedType, Task}};
-
-    #[tokio::test]
-    async fn main_test() {
-        let sq = SchedQueue::new();
-
-        let acc = Arc::new(Mutex::new(0));
-
-        for i in 0..10 {
-            let acc = acc.clone();
-            sq.add(Task::new(SchedType::Delay(Duration::from_secs(11-i), 1), Box::new(move || {
-                let acc = acc.clone();
-                Box::pin(async move {
-                    println!("hello {}", i);
-                    let mut guard = acc.lock().await;
-                    *guard += 1;
-                })
-
-            }))).await;
-        }
-        tokio::time::sleep(Duration::from_secs(120)).await;
-        let guard = acc.lock().await;
-        dbg!(*guard);
-    }
-}
+pub mod message;
