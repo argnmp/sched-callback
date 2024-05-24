@@ -69,19 +69,22 @@ async fn _add(sq: Arc<_EventQueue>, mut task: Task) {
     let mut running_guard = sq.running.lock().await;
 
     task.id = Some(sq.get_tid().await);
+    // initialize timestamp of task
     task.ready(sq._rt.clone());
 
+    // if timestamp is None, no more schedule is need for the task
     if task.timestamp.is_none() {
         return;
     }
 
     let taskhandle = running_guard.take();
-
     match taskhandle {
         Some(t) => {
-            let Some(cur_timestamp) = task.timestamp else { return; };
-            let Some(new_timestamp) = t.task.timestamp else { return; };
-            if cur_timestamp < new_timestamp {
+            let Some(running_timestamp) = t.task.timestamp else { return; };
+            let Some(new_timestamp) = task.timestamp else { return; };
+
+            // if new task timestamp is earlier than the running one, abort waiting task;
+            if new_timestamp < running_timestamp {
                 t.handle.abort();
                 tasks_guard.push(t.task);
             }
@@ -91,6 +94,7 @@ async fn _add(sq: Arc<_EventQueue>, mut task: Task) {
         },
         None => {}
     }
+
     tasks_guard.push(task);
     tasks_guard.sort_by(|a, b| {
         b.timestamp.unwrap().cmp(&a.timestamp.unwrap())

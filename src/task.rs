@@ -37,6 +37,7 @@ impl Task {
         }
     }
     pub(crate) fn ready(&mut self, rt: tokio::runtime::Handle) {
+        // initialize next timestamp using sched type of task
         match &mut self.sched_type {
             SchedType::Timestamp(timestamp) => {
                 match self.timestamp {
