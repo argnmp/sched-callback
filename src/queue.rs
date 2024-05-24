@@ -117,14 +117,14 @@ pub struct SchedQueue {
 }
 impl SchedQueue {
     /// Create new scheduler.
-    /// Use tokio runtime of the context of this function is called.
+    /// Use tokio runtime of the context that this function is called.
     pub fn new() -> Self {
         Self {
             eq: Arc::new(_EventQueue::new(tokio::runtime::Handle::current()))
         }
     }
     /// Schedule task.
-    /// After calling this function, queue will automatically start scheduling tasks.
+    /// After calling this function, scheduler will automatically start executing its tasks.
     pub async fn add(&self, task: Task) {
         _add(self.eq.clone(), task).await;
     }
