@@ -1,10 +1,15 @@
 use std::{future::Future, pin::Pin, sync::Arc, task::{Poll, Waker}, time::{Duration, SystemTime}};
 
+use crate::queue::AsyncRt;
+
 type Callback = Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static>;
 type ArcAsyncMutex<T> = Arc<tokio::sync::Mutex<T>>;
 type ArcSyncMutex<T> = Arc<std::sync::Mutex<T>>;
-type AsyncRt = tokio::runtime::Handle;
 
+/// Specifies the schedule type of task.
+/// - SchedType::Timestamp(SystemTime) specifies the SystemTime when the callback will be executed.
+/// - SchedType::Delay(Duration, usize) specifies the interval and count that the callback will be
+/// executed.
 #[derive(Clone, Debug)]
 pub enum SchedType {
     Timestamp(SystemTime),
@@ -20,6 +25,7 @@ pub struct Task {
     _rt: Option<AsyncRt>,
 }
 impl Task {
+    /// Creates new task with SchedType and callback.
     pub fn new(sched_type: SchedType, callback: Callback) -> Self {
         Self {
             id: None,
@@ -30,7 +36,7 @@ impl Task {
             _rt: None,
         }
     }
-    pub(crate) fn ready(&mut self) {
+    pub(crate) fn ready(&mut self, rt: tokio::runtime::Handle) {
         match &mut self.sched_type {
             SchedType::Timestamp(timestamp) => {
                 match self.timestamp {
@@ -51,7 +57,7 @@ impl Task {
             }
             
         }
-        self._rt = Some(tokio::runtime::Handle::current());
+        self._rt = Some(rt);
     }
 }
 impl Clone for Task {

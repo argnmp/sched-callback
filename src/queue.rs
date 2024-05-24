@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use tokio::task::JoinHandle;
+use tokio::{sync::MutexGuard, task::JoinHandle};
 
 use crate::task::Task;
+
+pub(crate) type AsyncRt = tokio::runtime::Handle;
 
 struct TaskHandle {
     task: Task,
@@ -12,83 +14,93 @@ struct TaskHandle {
 struct _EventQueue {
     tid: tokio::sync::Mutex<usize>,
     tasks: tokio::sync::Mutex<Vec<Task>>,
-    current: tokio::sync::Mutex<Option<TaskHandle>>,
+    running: tokio::sync::Mutex<Option<TaskHandle>>,
+    _rt: AsyncRt,
 }
 impl _EventQueue {
-    fn new() -> Self {
+    fn new(rt: AsyncRt) -> Self {
         Self {
             tid: tokio::sync::Mutex::new(1),
             tasks: tokio::sync::Mutex::new(Vec::new()),
-            current: tokio::sync::Mutex::new(None),
+            running: tokio::sync::Mutex::new(None),
+            _rt: rt,
         }
     }
+    async fn lock_tasks(&self) -> MutexGuard<Vec<Task>> {
+        self.tasks.lock().await 
+    }
+    async fn lock_running(&self) -> MutexGuard<Option<TaskHandle>> {
+        self.running.lock().await 
+    }
+    async fn get_tid(&self) -> usize {
+        let mut guard = self.tid.lock().await; 
+        let tid = *guard;
+        *guard += 1;
+        return tid;
+    }
 }
-async fn spawn_task(sq: Arc<_EventQueue>, task: &Task) -> JoinHandle<()> {
+async fn _run_task(sq: Arc<_EventQueue>, task: &Task) -> JoinHandle<()> {
+    let sqc = sq.clone();
     let task = task.clone();
-    tokio::spawn(async move {
+    sq._rt.spawn(async move {
         task.clone().await;
-        add(sq.clone(), task).await;
-        next(sq.clone()).await;
+        _add(sqc.clone(), task).await;
+        _next(sqc.clone()).await;
     })
 }
 
 #[async_recursion]
-async fn next(sq: Arc<_EventQueue>) {
-    let mut queue_guard = sq.tasks.lock().await; 
-    let mut current_guard = sq.current.lock().await;
-    *current_guard = None;
+async fn _next(sq: Arc<_EventQueue>) {
+    let mut tasks_guard = sq.lock_tasks().await; 
+    let mut running_guard = sq.lock_running().await;
+    *running_guard = None;
 
-    if let Some(task) = queue_guard.pop() {
-        // println!("task next start: {:?} {:?}", task.id, task.timestamp);
-        let handle = spawn_task(sq.clone(), &task).await;
-        *current_guard = Some(TaskHandle {
+    if let Some(task) = tasks_guard.pop() {
+        let handle = _run_task(sq.clone(), &task).await;
+        *running_guard = Some(TaskHandle {
             task,
             handle
         });
     }
 }
 #[async_recursion]
-async fn add(sq: Arc<_EventQueue>, mut task: Task) {
-    let mut tid = sq.tid.lock().await;
-    let mut queue_guard = sq.tasks.lock().await; 
-    let mut current_guard = sq.current.lock().await;
+async fn _add(sq: Arc<_EventQueue>, mut task: Task) {
+    let mut tasks_guard = sq.tasks.lock().await; 
+    let mut running_guard = sq.running.lock().await;
 
-    task.id = Some(*tid);
-    *tid += 1;
+    task.id = Some(sq.get_tid().await);
+    task.ready(sq._rt.clone());
 
-    task.ready();
     if task.timestamp.is_none() {
         return;
     }
 
-    let taskhandle = current_guard.take();
+    let taskhandle = running_guard.take();
 
     match taskhandle {
         Some(t) => {
             let Some(cur_timestamp) = task.timestamp else { return; };
             let Some(new_timestamp) = t.task.timestamp else { return; };
             if cur_timestamp < new_timestamp {
-                // println!("task abort: {:?} {:?}", t.task.id, t.task.timestamp);
                 t.handle.abort();
-                queue_guard.push(t.task);
+                tasks_guard.push(t.task);
             }
             else {
-                *current_guard = Some(t);
+                *running_guard = Some(t);
             }
         },
         None => {}
     }
-    queue_guard.push(task);
-    queue_guard.sort_by(|a, b| {
+    tasks_guard.push(task);
+    tasks_guard.sort_by(|a, b| {
         b.timestamp.unwrap().cmp(&a.timestamp.unwrap())
     });
 
-    if current_guard.is_none() {
-        match queue_guard.pop() {
+    if running_guard.is_none() {
+        match tasks_guard.pop() {
             Some(task) => {
-                // println!("task add start: {:?} {:?}", task.id, task.timestamp);
-                let handle = spawn_task(sq.clone(), &task).await;
-                *current_guard = Some(TaskHandle {
+                let handle = _run_task(sq.clone(), &task).await;
+                *running_guard = Some(TaskHandle {
                     task,
                     handle
                 });
@@ -104,12 +116,16 @@ pub struct SchedQueue {
     eq: Arc<_EventQueue>,
 }
 impl SchedQueue {
+    /// Create new scheduler.
+    /// Use tokio runtime of the context of this function is called.
     pub fn new() -> Self {
         Self {
-            eq: Arc::new(_EventQueue::new())
+            eq: Arc::new(_EventQueue::new(tokio::runtime::Handle::current()))
         }
     }
+    /// Schedule task.
+    /// After calling this function, queue will automatically start scheduling tasks.
     pub async fn add(&self, task: Task) {
-        add(self.eq.clone(), task).await;
+        _add(self.eq.clone(), task).await;
     }
 }
