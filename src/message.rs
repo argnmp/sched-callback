@@ -11,7 +11,7 @@ pub enum MessageType{
 }
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::{Duration, SystemTime}};
+    use std::{sync::Arc, time::{Duration}};
     use tokio::sync::Mutex;
     use crate::{queue::SchedQueue, task::{SchedType, Task}, message::MessageType};
 

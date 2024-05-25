@@ -43,7 +43,7 @@ impl _EventQueue {
         let mut guard = self.tid.lock().await; 
         let tid = *guard;
         *guard += 1;
-        return tid;
+        tid
     }
 }
 async fn _run_task(sq: Arc<_EventQueue>, task: &Task) -> Option<JoinHandle<()>> {
@@ -112,22 +112,19 @@ async fn _add(sq: Arc<_EventQueue>, mut task: Task) -> Option<usize> {
     }
 
     let taskhandle = running_guard.take();
-    match taskhandle {
-        Some(t) => {
-            let Some(running_timestamp) = t.task.timestamp else { return None; };
-            let Some(new_timestamp) = task.timestamp else { return None; };
+    if let Some(t) = taskhandle {
+        let Some(running_timestamp) = t.task.timestamp else { return None; };
+        let Some(new_timestamp) = task.timestamp else { return None; };
 
-            // if new task timestamp is earlier than the running one, abort waiting task;
-            if new_timestamp < running_timestamp {
-                t.handle.abort();
-                tasks_guard.push(t.task);
-                sq.tx.send(MessageType::Abort(task_id, SystemTime::now())).await.expect("_add: message sending failed");
-            }
-            else {
-                *running_guard = Some(t);
-            }
-        },
-        None => {}
+        // if new task timestamp is earlier than the running one, abort waiting task;
+        if new_timestamp < running_timestamp {
+            t.handle.abort();
+            tasks_guard.push(t.task);
+            sq.tx.send(MessageType::Abort(task_id, SystemTime::now())).await.expect("_add: message sending failed");
+        }
+        else {
+            *running_guard = Some(t);
+        }
     }
 
     tasks_guard.push(task);
@@ -136,18 +133,13 @@ async fn _add(sq: Arc<_EventQueue>, mut task: Task) -> Option<usize> {
     });
 
     if running_guard.is_none() {
-        match tasks_guard.pop() {
-            Some(task) => {
-                let handle = _run_task(sq.clone(), &task).await;
-                if let Some(handle) = handle {
-                    *running_guard = Some(TaskHandle {
-                        task,
-                        handle
-                    });
-                }
-            },
-            None => {
-
+        if let Some(task) = tasks_guard.pop() {
+            let handle = _run_task(sq.clone(), &task).await;
+            if let Some(handle) = handle {
+                *running_guard = Some(TaskHandle {
+                    task,
+                    handle
+                });
             }
         }
     }
@@ -192,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn timestamp_test() {
-        let (sq, rx) = SchedQueue::new();
+        let (sq, _rx) = SchedQueue::new();
 
         let reserved_time = SystemTime::now() + Duration::from_millis(500);
         let executed_time = Arc::new(Mutex::new(SystemTime::now()));
@@ -214,7 +206,7 @@ mod tests {
     }
     #[tokio::test]
     async fn delay_test() {
-        let (sq, rx) = SchedQueue::new();
+        let (sq, _rx) = SchedQueue::new();
         let order = Arc::new(Mutex::new(Vec::new()));
 
         for i in 0..10 {
@@ -230,7 +222,7 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
         let guard = order.lock().await;
-        let expected = vec![9,8,7,6,5,4,3,2,1,0,9,8,7,6,5,4,3,2,1,0];
+        let expected = [9,8,7,6,5,4,3,2,1,0,9,8,7,6,5,4,3,2,1,0];
         assert_eq!(guard.len(), expected.len());
         for (e, r) in expected.iter().zip(&*guard) {
             assert_eq!(e, r);
@@ -239,7 +231,7 @@ mod tests {
     }
     #[tokio::test]
     async fn cancel_test() {
-        let (sq, rx) = SchedQueue::new();
+        let (sq, _rx) = SchedQueue::new();
         let order = Arc::new(Mutex::new(Vec::new()));
 
         for i in 0..10 {
@@ -258,7 +250,7 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
         let guard = order.lock().await;
-        let expected = vec![9,8,7,6,5,4,3,2,1,0];
+        let expected = [9,8,7,6,5,4,3,2,1,0];
         assert_eq!(guard.len(), expected.len());
         for (e, r) in expected.iter().zip(&*guard) {
             assert_eq!(e, r);

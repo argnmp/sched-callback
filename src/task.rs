@@ -70,7 +70,7 @@ impl Clone for Task {
         Self {
             id: self.id,
             sched_type: self.sched_type.clone(),
-            timestamp: self.timestamp.clone(),
+            timestamp: self.timestamp,
             callback: self.callback.clone(),
             _waker: self._waker.clone(),
             _rt: self._rt.clone(),
@@ -111,7 +111,7 @@ impl Future for Task {
                 waker.wake_by_ref();
             });
         }
-        return Poll::Pending;
+        Poll::Pending
     }
 }
 
